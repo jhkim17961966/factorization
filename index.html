@@ -243,6 +243,37 @@
 </div>
 
 <script>
+    /* --- 교환법칙(순서 변경) 해결을 위한 정규화 함수 --- */
+    // "(A)(B)" 형태의 문자열이 들어오면 알파벳 순으로 정렬하여 "(A)(B)" 와 "(B)(A)"를 항상 같은 문자열로 만듭니다.
+    function normalize(str) {
+        let match = str.match(/\(([^)]+)\)\(([^)]+)\)/);
+        if (match) {
+            let arr = [match[1], match[2]].sort();
+            return `(${arr[0]})(${arr[1]})`;
+        }
+        return str;
+    }
+
+    // 보기 배열(wrongsList)에서 정답과 (순서만 바뀐) 같은 식을 걸러내고, 보기들끼리의 중복도 제거하는 함수
+    function filterWrongs(correct, wrongsList) {
+        let normCorrect = normalize(correct);
+        let uniqueWrongs = [];
+        
+        for (let w of wrongsList) {
+            let nW = normalize(w);
+            // 1. 정답과 같지 않은가? (교환법칙 포함)
+            if (nW !== normCorrect) {
+                let isDup = false;
+                // 2. 이미 추가된 오답 보기 중에 같은 것이 없는가? (교환법칙 포함)
+                for (let uw of uniqueWrongs) {
+                    if (normalize(uw) === nW) isDup = true;
+                }
+                if (!isDup) uniqueWrongs.push(w);
+            }
+        }
+        return uniqueWrongs;
+    }
+
     /* --- 수학식 포맷팅 및 생성기 로직 --- */
     function formatPoly(A, B, C) {
         let res = "";
@@ -267,7 +298,6 @@
         return res === "" ? "0" : res;
     }
 
-    // 인수분해 결과(괄호)를 예쁘게 만들어주는 도우미 함수
     function makeBin(a, b) {
         let aStr = (a === 1) ? "x" : (a === -1 ? "-x" : a + "x");
         let bStr = (b > 0) ? `+ ${b}` : `- ${Math.abs(b)}`;
@@ -277,12 +307,12 @@
     function rand(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
     function randNonZero(min, max) { let v = 0; while(v === 0) v = rand(min, max); return v; }
     
-    // 최대공약수를 구해 서로소인지 확인 (깔끔한 인수분해를 위함)
     function gcd(x, y) {
         x = Math.abs(x); y = Math.abs(y);
         while(y) { let t = y; y = x % y; x = t; }
         return x;
     }
+    
     function randCoprime(minA, maxA, minB, maxB) {
         let a, b;
         do {
@@ -292,23 +322,20 @@
         return [a, b];
     }
 
-    /* 곱셈 전개가 아닌, 인수분해를 위한 생성기로 완벽 수정 */
     const generators = {
         1: () => {
-            // 완전제곱식 역과정
             let [a, b] = randCoprime(1, 4, -6, 6);
-            let qStr = formatPoly(a*a, 2*a*b, b*b); // 문제는 풀어진 형태
-            let correct = `${makeBin(a, b)}²`;      // 정답은 묶인 형태
+            let qStr = formatPoly(a*a, 2*a*b, b*b); 
+            let correct = `${makeBin(a, b)}²`;      
             let wrongs = [
                 `${makeBin(a, -b)}²`, 
                 `${makeBin(a, b*2)}²`, 
                 `${makeBin(a*a, b)}²`, 
                 `${makeBin(a, b > 0 ? b+1 : b-1)}²`
             ];
-            return { q: qStr, a: correct, w: [...new Set(wrongs)].filter(w => w !== correct) };
+            return { q: qStr, a: correct, w: filterWrongs(correct, wrongs) };
         },
         2: () => {
-            // 합차 공식 역과정
             let [a, b] = randCoprime(1, 5, 1, 7);
             let qStr = formatPoly(a*a, 0, -b*b);
             let correct = `${makeBin(a, b)}${makeBin(a, -b)}`;
@@ -318,16 +345,15 @@
                 `${makeBin(a, b*b)}${makeBin(a, -b*b)}`, 
                 `${makeBin(a*a, b)}${makeBin(a*a, -b)}`
             ];
-            return { q: qStr, a: correct, w: [...new Set(wrongs)].filter(w => w !== correct) };
+            return { q: qStr, a: correct, w: filterWrongs(correct, wrongs) };
         },
         3: () => {
-            // x² + (a+b)x + ab 역과정
             let a, b;
             do {
                 a = randNonZero(-8, 8);
                 b = randNonZero(-8, 8);
             } while (Math.abs(a) === Math.abs(b));
-            if (a < b) { let t = a; a = b; b = t; } // 중복 형태 방지 정렬
+            if (a < b) { let t = a; a = b; b = t; } 
 
             let qStr = formatPoly(1, a+b, a*b);
             let correct = `${makeBin(1, a)}${makeBin(1, b)}`;
@@ -337,10 +363,9 @@
                 `${makeBin(1, -a)}${makeBin(1, b)}`, 
                 `${makeBin(1, a+b)}${makeBin(1, a*b)}`
             ];
-            return { q: qStr, a: correct, w: [...new Set(wrongs)].filter(w => w !== correct) };
+            return { q: qStr, a: correct, w: filterWrongs(correct, wrongs) };
         },
         4: () => {
-            // acx² + (ad+bc)x + bd 역과정
             let a, b, c, d;
             do {
                 [a, b] = randCoprime(2, 4, -5, 5);
@@ -358,11 +383,10 @@
                 `${makeBin(c, b)}${makeBin(a, d)}`, 
                 `${makeBin(a*c, b)}${makeBin(1, d)}`
             ];
-            return { q: qStr, a: correct, w: [...new Set(wrongs)].filter(w => w !== correct) };
+            return { q: qStr, a: correct, w: filterWrongs(correct, wrongs) };
         }
     };
 
-    // 상단 노출용 공식 뒤집기
     const formulas = {
         1: "a² ± 2ab + b² = (a ± b)²",
         2: "a² - b² = (a + b)(a - b)",
@@ -388,24 +412,34 @@
     function startQuiz(stage) {
         document.getElementById('active-formula').innerText = formulas[stage];
         currentStageQuestions = [];
-        let usedQuestions = new Set(); // 중복 방지를 위한 저장소
+        let usedQuestions = new Set(); 
 
         for(let i = 0; i < 10; i++) {
             let qData;
-            // 완전히 새로운 문제가 나올 때까지 반복 (중복 제거)
             do {
                 qData = generators[stage]();
             } while (usedQuestions.has(qData.q));
             usedQuestions.add(qData.q);
 
-            // 오답 보기가 3개 미만일 경우 예비 오답 채우기
+            let normCorrect = normalize(qData.a);
+
+            // 오답 보기가 3개 미만일 경우 예비 오답 채우기 (여기도 정규화 검증 포함)
             while(qData.w.length < 3) {
                 let fallback;
                 if(stage === 1) fallback = `${makeBin(rand(1,4), randNonZero(-6,6))}²`;
                 else if(stage === 2) { let rA=rand(1,4), rB=rand(1,6); fallback = `${makeBin(rA, rB)}${makeBin(rA, -rB)}`; }
                 else fallback = `${makeBin(rand(1,4), randNonZero(-6,6))}${makeBin(rand(1,4), randNonZero(-6,6))}`;
 
-                if(fallback !== qData.a && !qData.w.includes(fallback)) qData.w.push(fallback);
+                let normFallback = normalize(fallback);
+                
+                let isDuplicate = false;
+                for(let w of qData.w) {
+                    if (normalize(w) === normFallback) isDuplicate = true;
+                }
+
+                if(normFallback !== normCorrect && !isDuplicate) {
+                    qData.w.push(fallback);
+                }
             }
             currentStageQuestions.push(qData);
         }
@@ -429,7 +463,6 @@
             { text: qObj.w[1], isCorrect: false },
             { text: qObj.w[2], isCorrect: false }
         ];
-        // 보기 순서 랜덤 셔플
         options.sort(() => Math.random() - 0.5);
         
         const grid = document.getElementById('options-grid');
